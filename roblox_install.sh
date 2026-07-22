@@ -1,88 +1,108 @@
 #!/bin/bash
+set -e
 
-set -u
-
-echo "Getting Roblox version..."
-
+# --- GET VERSION HASH ---
 ROBLOX_VERSION=$(
-    curl -fsSL \
-    "https://clientsettings.roblox.com/v2/client-version/MacPlayer/channel/LIVE" |
-    python3 -c '
-import sys, json
-data = json.load(sys.stdin)
-print(data["clientVersionUpload"])
-'
+curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacPlayer/channel/LIVE" \
+| python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
 )
 
 if [ -z "$ROBLOX_VERSION" ]; then
-    echo "Failed to get Roblox version."
+    echo "Failed to fetch Roblox version"
     exit 1
 fi
 
-echo "Version: $ROBLOX_VERSION"
+# --- CLEAN ---
+rm -rf Roblox.app RobloxExtract /tmp/roblox.zip
 
-ARCH=$(uname -m)
+# --- ARCH DETECTION ---
+ARCH="arm64"
+if [ "$(uname -m)" = "x86_64" ]; then
+    ARCH="x86-64"
+fi
 
-case "$ARCH" in
-    arm64)
-        ROBLOX_ARCH="arm64"
-        ;;
-    x86_64)
-        ROBLOX_ARCH="x86-64"
-        ;;
-    *)
-        echo "Unsupported architecture: $ARCH"
-        exit 1
-        ;;
-esac
+# --- BUILD DOWNLOAD URL ---
+DOWNLOAD_URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${ROBLOX_VERSION}-RobloxPlayer.zip"
 
-DOWNLOAD_URL="https://setup-aws.rbxcdn.com/mac/${ROBLOX_ARCH}/${ROBLOX_VERSION}-RobloxPlayer.zip"
+curl -L --fail --show-error "$DOWNLOAD_URL" -o /tmp/roblox.zip
 
-echo "Downloading Roblox..."
-echo "$DOWNLOAD_URL"
+# --- VALIDATE ZIP ---
+FILE_TYPE=$(file /tmp/roblox.zip)
 
-rm -f /tmp/roblox.zip
-rm -rf /tmp/RobloxExtract
-
-if ! curl -fL --show-error "$DOWNLOAD_URL" -o /tmp/roblox.zip; then
-    echo "Download failed."
+if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
+    echo "ERROR: Download is not a valid ZIP (got HTML instead)"
     exit 1
 fi
 
-if ! file /tmp/roblox.zip | grep -qi "zip archive"; then
-    echo "Downloaded file is not a valid ZIP."
-    file /tmp/roblox.zip
-    exit 1
-fi
+# --- EXTRACT ---
+rm -rf RobloxExtract
+mkdir -p RobloxExtract
+unzip -q /tmp/roblox.zip -d RobloxExtract
 
-mkdir -p /tmp/RobloxExtract
-
-if ! unzip -q /tmp/roblox.zip -d /tmp/RobloxExtract; then
-    echo "Extraction failed."
-    exit 1
-fi
-
-APP=$(find /tmp/RobloxExtract -type d -name "*.app" -print -quit)
+APP=$(find RobloxExtract -name "*.app" | head -n 1)
 
 if [ -z "$APP" ]; then
-    echo "No application was found in the downloaded archive."
+    echo "Could not find Roblox app"
     exit 1
 fi
 
-echo "Found app:"
-echo "$APP"
+# =========================
+# PATCH SECTION
+# =========================
 
+codesign --remove-signature "$APP" 2>/dev/null || true
+
+MACOS_DIR="$APP/Contents/MacOS"
+PLIST="$APP/Contents/Info.plist"
+
+if [ -f "$MACOS_DIR/RobloxPlayer" ]; then
+    mv "$MACOS_DIR/RobloxPlayer" "$MACOS_DIR/Self Service"
+fi
+
+if [ -d "$APP/Contents/MacOS/RobloxPlayerInstaller.app" ]; then
+    rm -rf "$APP/Contents/MacOS/RobloxPlayerInstaller.app"
+fi
+
+if [ -d "$APP/Contents/MacOS/RobloxMenuBar.app" ]; then
+    rm -rf "$APP/Contents/MacOS/RobloxMenuBar.app"
+fi
+
+# CFBundleExecutable -> r
+/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Self Service" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Self Service" "$PLIST"
+
+# CFBundleIdentifier -> leo.nel.com
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.jamfsoftware.selfservice.mac" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.jamfsoftware.selfservice.mac" "$PLIST"
+
+codesign --force --deep --sign - "$APP"
+
+codesign --verify --deep --strict "$APP" || true
+
+# --- INSTALL ---
 INSTALL_DIR="$HOME/Applications"
 mkdir -p "$INSTALL_DIR"
 
-FINAL_APP_PATH="$INSTALL_DIR/Roblox.app"
+APP_NAME="Self Service.app"
+FINAL_APP_PATH="$INSTALL_DIR/$APP_NAME"
 
 rm -rf "$FINAL_APP_PATH"
 mv "$APP" "$FINAL_APP_PATH"
 
-echo "Roblox installed to:"
-echo "$FINAL_APP_PATH"
+defaults write com.apple.dock persistent-apps -array-add \
+"<dict>
+    <key>tile-data</key>
+    <dict>
+        <key>file-data</key>
+        <dict>
+            <key>_CFURLString</key>
+            <string>$FINAL_APP_PATH</string>
+            <key>_CFURLStringType</key>
+            <integer>0</integer>
+        </dict>
+    </dict>
+</dict>"
 
-open "$FINAL_APP_PATH"
+killall Dock
 
-echo "Finished."
+echo "Done. It should be in your dock now so just open it from there"
