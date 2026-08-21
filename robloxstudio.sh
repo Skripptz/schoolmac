@@ -3,18 +3,19 @@
 set -e
 
 # --- GET VERSION HASH ---
-STUDIO_VERSION=$(
+ROBLOX_VERSION=$(
 curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacStudio/channel/LIVE" \
 | python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
 )
-if [ -z "$STUDIO_VERSION" ]; then
+if [ -z "$ROBLOX_VERSION" ]; then
     echo "Failed to fetch Roblox version"
     exit 1
 fi
 
+echo("we tried")
 # --- CLEAN ---
 rm -rf RobloxStudio.app RobloxStudioExtract /tmp/robloxstudio.dmg
-
+echo("we conquered"
 # --- ARCH DETECTION ---
 ARCH="arm64"
 if [ "$(uname -m)" = "x86_64" ]; then
