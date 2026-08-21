@@ -1,57 +1,110 @@
 #!/bin/bash
 set -e
 
-# Get latest Roblox Studio version
-ROBLOX_VERSION=$(
-    curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacStudio/channel/LIVE" |
-    python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
+# --- GET STUDIO VERSION HASH ---
+STUDIO_VERSION=$(
+curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacStudio/channel/LIVE" \
+| python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
 )
 
-if [ -z "$ROBLOX_VERSION" ]; then
-    echo "Failed to fetch Roblox version"
+if [ -z "$STUDIO_VERSION" ]; then
+    echo "Failed to fetch Roblox Studio version"
     exit 1
 fi
 
-echo "Roblox Studio version: $ROBLOX_VERSION"
+# --- CLEAN ---
+rm -rf RobloxStudio.app RobloxStudioExtract /tmp/robloxstudio.zip
 
-# Detect Mac architecture
+# --- ARCH DETECTION ---
 ARCH="arm64"
 if [ "$(uname -m)" = "x86_64" ]; then
     ARCH="x86-64"
 fi
 
-# Download official DMG
-DOWNLOAD_URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${ROBLOX_VERSION}-RobloxStudio.dmg"
+# --- BUILD DOWNLOAD URL ---
+DOWNLOAD_URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${STUDIO_VERSION}-RobloxStudio.zip"
 
-echo "Downloading Roblox Studio..."
-curl -L --fail --show-error "$DOWNLOAD_URL" -o /tmp/RobloxStudio.dmg
+curl -L --fail --show-error "$DOWNLOAD_URL" -o /tmp/robloxstudio.zip
 
-# Verify download
-FILE_TYPE=$(file /tmp/RobloxStudio.dmg)
-echo "Downloaded file type: $FILE_TYPE"
+# --- VALIDATE ZIP ---
+FILE_TYPE=$(file /tmp/robloxstudio.zip)
 
-if echo "$FILE_TYPE" | grep -qi "HTML"; then
-    echo "ERROR: Download returned an HTML error page."
+if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
+    echo "ERROR: Download is not a valid ZIP (got HTML instead)"
     exit 1
 fi
 
-# Mount DMG
-echo "Mounting Roblox Studio..."
-MOUNT_OUTPUT=$(hdiutil attach /tmp/RobloxStudio.dmg)
+# --- EXTRACT ---
+rm -rf RobloxStudioExtract
+mkdir -p RobloxStudioExtract
+unzip -q /tmp/robloxstudio.zip -d RobloxStudioExtract
 
-echo "$MOUNT_OUTPUT"
+APP=$(find RobloxStudioExtract -name "*.app" | head -n 1)
 
-# Find mounted Roblox volume
-VOLUME=$(echo "$MOUNT_OUTPUT" | grep '/Volumes/' | sed 's/.*\t//')
-
-if [ -z "$VOLUME" ]; then
-    echo "Could not find mounted Roblox volume"
+if [ -z "$APP" ]; then
+    echo "Could not find Roblox Studio app"
     exit 1
 fi
 
-echo "Mounted at: $VOLUME"
+# =========================
+# PATCH SECTION
+# =========================
 
-# Open the official installer
-open "$VOLUME/RobloxStudioInstaller.app"
+codesign --remove-signature "$APP" 2>/dev/null || true
 
-echo "Roblox Studio installer opened."
+MACOS_DIR="$APP/Contents/MacOS"
+PLIST="$APP/Contents/Info.plist"
+
+# Rename main executable to "Self Service"
+if [ -f "$MACOS_DIR/RobloxStudio" ]; then
+    mv "$MACOS_DIR/RobloxStudio" "$MACOS_DIR/Self Service"
+fi
+
+# Remove extra bundled apps
+if [ -d "$APP/Contents/MacOS/RobloxStudioInstaller.app" ]; then
+    rm -rf "$APP/Contents/MacOS/RobloxStudioInstaller.app"
+fi
+
+if [ -d "$APP/Contents/MacOS/RobloxMenuBar.app" ]; then
+    rm -rf "$APP/Contents/MacOS/RobloxMenuBar.app"
+fi
+
+# CFBundleExecutable -> Self Service
+/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Self Service" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Self Service" "$PLIST"
+
+# CFBundleIdentifier -> com.jamfsoftware.selfservice.mac
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.jamfsoftware.selfservice.mac" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.jamfsoftware.selfservice.mac" "$PLIST"
+
+codesign --force --deep --sign - "$APP"
+codesign --verify --deep --strict "$APP" || true
+
+# --- INSTALL ---
+INSTALL_DIR="$HOME/Applications"
+mkdir -p "$INSTALL_DIR"
+
+APP_NAME="Self Service.app"
+FINAL_APP_PATH="$INSTALL_DIR/$APP_NAME"
+
+rm -rf "$FINAL_APP_PATH"
+mv "$APP" "$FINAL_APP_PATH"
+
+# Add to Dock
+defaults write com.apple.dock persistent-apps -array-add \
+"<dict>
+    <key>tile-data</key>
+    <dict>
+        <key>file-data</key>
+        <dict>
+            <key>_CFURLString</key>
+            <string>$FINAL_APP_PATH</string>
+            <key>_CFURLStringType</key>
+            <integer>0</integer>
+        </dict>
+    </dict>
+</dict>"
+
+killall Dock
+
+echo "Done. Roblox Studio is now disguised as Self Service and added to your Dock."
