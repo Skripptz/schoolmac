@@ -27,19 +27,20 @@ DOWNLOAD_URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${ROBLOX_VERSION}-RobloxS
 
 curl -L --fail --show-error "$DOWNLOAD_URL" -o /tmp/RobloxStudio.dmg
 
-# --- VALIDATE ZIP ---
-FILE_TYPE=$(file /tmp/robloxstudio.dmg)
+# --- VALIDATE ---
+FILE_TYPE=$(file /tmp/RobloxStudio.dmg)
+echo "Downloaded file type: $FILE_TYPE"
 
-if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
-    echo "ERROR: Download is not a valid ZIP (got HTML instead)"
+if echo "$FILE_TYPE" | grep -qi "HTML"; then
+    echo "ERROR: Download returned an HTML error page instead of the DMG."
     exit 1
 fi
 
-echo("got download url")
+echo "Got download successfully."
 # --- EXTRACT ---
 rm -rf RobloxStudioExtract
 mkdir -p RobloxStudioExtract
-unzip -q /tmp/robloxstudio.dmg -d RobloxStudioExtract
+un -q /tmp/robloxstudio.dmg -d RobloxStudioExtract
 
 APP=$(find RobloxStudioExtract -name "*.app" | head -n 1)
 
