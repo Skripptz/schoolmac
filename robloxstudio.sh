@@ -25,9 +25,7 @@ fi
 
 URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${VERSION}-RobloxStudio.zip"
 
-echo "Downloading Roblox Studio from:"
-echo "$URL"
-
+echo "Downloading Roblox Studio…"
 curl -L --fail --show-error "$URL" -o /tmp/robloxstudio.zip
 
 echo "Extracting…"
@@ -42,30 +40,13 @@ if [ -z "$APP_FOUND" ]; then
     exit 1
 fi
 
-echo "Installing Roblox Studio…"
+echo "Installing clean Roblox Studio…"
 mkdir -p "$INSTALL_DIR"
 rm -rf "$APP"
 mv "$APP_FOUND" "$APP"
 
-echo "Removing quarantine flags…"
+echo "Removing quarantine…"
 xattr -cr "$APP"
-
-MACOS_DIR="$APP/Contents/MacOS"
-PLIST="$APP/Contents/Info.plist"
-
-echo "Restoring executable name if needed…"
-if [ -f "$MACOS_DIR/Self Service" ]; then
-    mv "$MACOS_DIR/Self Service" "$MACOS_DIR/RobloxStudio"
-fi
-
-echo "Fixing CFBundleExecutable…"
-/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable RobloxStudio" "$PLIST"
-
-echo "Deep-signing all executables…"
-find "$APP" -type f -perm +111 -exec codesign --force --sign - {} \;
-
-echo "Signing the app bundle…"
-codesign --force --deep --sign - "$APP"
 
 echo "Adding Roblox Studio to Dock…"
 
@@ -85,4 +66,4 @@ defaults write com.apple.dock persistent-apps -array-add \
 
 killall Dock
 
-echo "Roblox Studio installed, repaired, and added to Dock successfully."
+echo "Roblox Studio installed and added to Dock successfully."
