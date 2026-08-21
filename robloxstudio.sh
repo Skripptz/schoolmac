@@ -1,62 +1,42 @@
 #!/bin/bash
 set -e
 
-INSTALL_DIR="$HOME/Applications"
-mkdir -p "$INSTALL_DIR"
+echo "Downloading latest Roblox Player for macOS..."
 
-##############################################
-# FUNCTION: Download + Install Roblox Variant
-##############################################
-install_roblox_variant() {
-    VARIANT_NAME="$1"          # MacPlayer or MacStudio
-    ZIP_NAME="$2"              # RobloxPlayer.zip or RobloxStudio.zip
-    FINAL_NAME="$3"            # Folder name you want (Self Service Player.app)
+# --- GET VERSION HASH ---
+ROBLOX_VERSION=$(
+curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacPlayer/channel/LIVE" \
+| python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
+)
 
-    echo "Installing $VARIANT_NAME..."
+if [ -z "$ROBLOX_VERSION" ]; then
+    echo "Failed to fetch Roblox Player version"
+    exit 1
+fi
 
-    # --- GET VERSION HASH ---
-    VERSION=$(
-    curl -fsSL "https://clientsettings.roblox.com/v2/client-version/${VARIANT_NAME}/channel/LIVE" \
-    | python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
-    )
+echo "Roblox Player version: $ROBLOX_VERSION"
 
-    if [ -z "$VERSION" ]; then
-        echo "Failed to fetch version for $VARIANT_NAME"
-        exit 1
-    fi
+# --- ARCH DETECTION ---
+ARCH="arm64"
+if [ "$(uname -m)" = "x86_64" ]; then
+    ARCH="x86-64"
+fi
 
-    echo "$VARIANT_NAME version: $VERSION"
+# --- DOWNLOAD ---
+URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${ROBLOX_VERSION}-RobloxPlayer.zip"
+echo "Downloading from: $URL"
 
-    # --- ARCH DETECTION ---
-    ARCH="arm64"
-    if [ "$(uname -m)" = "x86_64" ]; then
-        ARCH="x86-64"
-    fi
+curl -L --fail --show-error "$URL" -o /tmp/robloxplayer.zip
 
-    # --- DOWNLOAD ---
-    URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${VERSION}-${ZIP_NAME}"
-    echo "Downloading from: $URL"
+# --- VALIDATE ZIP ---
+FILE_TYPE=$(file /tmp/robloxplayer.zip)
+if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
+    echo "ERROR: Download is not a valid ZIP"
+    exit 1
+fi
 
-    curl -L --fail --show-error "$URL" -o /tmp/roblox_temp.zip
+echo "ZIP validated."
 
-    # --- VALIDATE ZIP ---
-    FILE_TYPE=$(file /tmp/roblox_temp.zip)
-    if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
-        echo "ERROR: Download is not a valid ZIP"
-        exit 1
-    fi
-
-    # --- EXTRACT ---
-    rm -rf RobloxExtract
-    mkdir -p RobloxExtract
-    unzip -q /tmp/roblox_temp.zip -d RobloxExtract
-
-    APP=$(find RobloxExtract -name "*.app" | head -n 1)
-
-    if [ -z "$APP" ]; then
-        echo "Could not find extracted app for $VARIANT_NAME"
-        exit 1
-    fi
-
-    # --- REMOVE QUARANTINE (SAFE) ---
-    xattr -cr "$
+# --- EXTRACT ---
+rm -rf RobloxPlayerExtract
+mkdir -p RobloxPlayer
