@@ -1,13 +1,12 @@
-echo("hello")
+
 #!/bin/bash
 set -e
-echo("we in some")
+
 # --- GET VERSION HASH ---
 STUDIO_VERSION=$(
 curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacStudio/channel/LIVE" \
 | python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
 )
-echo("gotversion)"
 if [ -z "$STUDIO_VERSION" ]; then
     echo "Failed to fetch Roblox version"
     exit 1
