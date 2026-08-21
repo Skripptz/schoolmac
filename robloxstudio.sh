@@ -40,7 +40,7 @@ echo "Got download successfully."
 # --- EXTRACT ---
 rm -rf RobloxStudioExtract
 mkdir -p RobloxStudioExtract
-un -q /tmp/robloxstudio.dmg -d RobloxStudioExtract
+hdiutil attach /tmp/RobloxStudio.dmg
 
 APP=$(find RobloxStudioExtract -name "*.app" | head -n 1)
 
