@@ -1,85 +1,49 @@
 #!/bin/bash
 set -e
 
-echo "Downloading latest Roblox Player for macOS..."
+echo "Fetching latest Roblox Studio version…"
 
-# --- GET VERSION HASH ---
-ROBLOX_VERSION=$(
-curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacPlayer/channel/LIVE" \
+VERSION=$(
+curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacStudio/channel/LIVE" \
 | python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
 )
 
-if [ -z "$ROBLOX_VERSION" ]; then
-    echo "Failed to fetch Roblox Player version"
+if [ -z "$VERSION" ]; then
+    echo "Failed to get version."
     exit 1
 fi
 
-echo "Roblox Player version: $ROBLOX_VERSION"
+echo "Latest version: $VERSION"
 
-# --- ARCH DETECTION ---
 ARCH="arm64"
 if [ "$(uname -m)" = "x86_64" ]; then
     ARCH="x86-64"
 fi
 
-# --- DOWNLOAD ---
-URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${ROBLOX_VERSION}-RobloxPlayer.zip"
-echo "Downloading from: $URL"
+URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${VERSION}-RobloxStudio.zip"
 
-curl -L --fail --show-error "$URL" -o /tmp/robloxplayer.zip
+echo "Downloading Roblox Studio from:"
+echo "$URL"
 
-# --- VALIDATE ZIP ---
-FILE_TYPE=$(file /tmp/robloxplayer.zip)
-if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
-    echo "ERROR: Download is not a valid ZIP"
-    exit 1
-fi
+curl -L --fail --show-error "$URL" -o /tmp/robloxstudio.zip
 
-echo "ZIP validated."
+echo "Extracting…"
+rm -rf /tmp/RobloxStudioExtract
+mkdir -p /tmp/RobloxStudioExtract
+unzip -q /tmp/robloxstudio.zip -d /tmp/RobloxStudioExtract
 
-# --- EXTRACT ---
-rm -rf RobloxPlayerExtract
-mkdir -p RobloxPlayerExtract
-unzip -q /tmp/robloxplayer.zip -d RobloxPlayerExtract
-
-APP=$(find RobloxPlayerExtract -name "*.app" | head -n 1)
+APP=$(find /tmp/RobloxStudioExtract -name "*.app" | head -n 1)
 
 if [ -z "$APP" ]; then
-    echo "Could not find Roblox Player app"
+    echo "Studio app not found."
     exit 1
 fi
 
-echo "Found app: $APP"
-
-# --- REMOVE QUARANTINE (SAFE) ---
-xattr -cr "$APP" || true
-
-# --- INSTALL (RENAME ONLY THE OUTER FOLDER) ---
 INSTALL_DIR="$HOME/Applications"
 mkdir -p "$INSTALL_DIR"
 
-FINAL_PATH="$INSTALL_DIR/Self Service.app"
+echo "Installing to $INSTALL_DIR…"
+rm -rf "$INSTALL_DIR/RobloxStudio.app"
+mv "$APP" "$INSTALL_DIR/RobloxStudio.app"
 
-rm -rf "$FINAL_PATH"
-mv "$APP" "$FINAL_PATH"
-
-echo "Roblox Player installed as: $FINAL_PATH"
-
-# --- ADD TO DOCK ---
-defaults write com.apple.dock persistent-apps -array-add \
-"<dict>
-    <key>tile-data</key>
-    <dict>
-        <key>file-data</key>
-        <dict>
-            <key>_CFURLString</key>
-            <string>$FINAL_PATH</string>
-            <key>_CFURLStringType</key>
-            <integer>0</integer>
-        </dict>
-    </dict>
-</dict>"
-
-killall Dock || true
-
-echo "Done. Roblox Player is now disguised as 'Self Service' and added to your Dock."
+echo "Roblox Studio installed successfully."
