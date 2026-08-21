@@ -42,7 +42,8 @@ rm -rf RobloxStudioExtract
 mkdir -p RobloxStudioExtract
 hdiutil attach /tmp/RobloxStudio.dmg
 
-APP=$(find RobloxStudioExtract -name "*.app" | head -n 1)
+# --- FIND APP ---
+APP=$(find "/Volumes/RobloxStudioInstaller 1" -name "*.app" -maxdepth 2 | head -n 1)
 
 if [ -z "$APP" ]; then
     echo "Could not find Roblox Studio app"
