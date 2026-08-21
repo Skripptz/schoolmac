@@ -12,10 +12,10 @@ if [ -z "$ROBLOX_VERSION" ]; then
     exit 1
 fi
 
-echo("we tried")
+
 # --- CLEAN ---
 rm -rf RobloxStudio.app RobloxStudioExtract /tmp/robloxstudio.dmg
-echo("we conquered"
+
 # --- ARCH DETECTION ---
 ARCH="arm64"
 if [ "$(uname -m)" = "x86_64" ]; then
@@ -35,6 +35,7 @@ if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
     exit 1
 fi
 
+echo("got download url")
 # --- EXTRACT ---
 rm -rf RobloxStudioExtract
 mkdir -p RobloxStudioExtract
