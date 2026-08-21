@@ -47,64 +47,26 @@ if [ -z "$APP" ]; then
 fi
 
 # =========================
-# PATCH SECTION
+# PATCH SECTION (SAFE)
 # =========================
 
 codesign --remove-signature "$APP" 2>/dev/null || true
 
-MACOS_DIR="$APP/Contents/MacOS"
 PLIST="$APP/Contents/Info.plist"
 
-# Rename main executable to "Self Service"
-if [ -f "$MACOS_DIR/RobloxStudio" ]; then
-    mv "$MACOS_DIR/RobloxStudio" "$MACOS_DIR/Self Service"
-fi
+# Change only the app's name and identifier
+/usr/libexec/PlistBuddy -c "Set :CFBundleName Self Service" "$PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Self Service" "$PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.jamfsoftware.selfservice.mac" "$PLIST"
 
-# Remove extra bundled apps
-if [ -d "$APP/Contents/MacOS/RobloxStudioInstaller.app" ]; then
-    rm -rf "$APP/Contents/MacOS/RobloxStudioInstaller.app"
-fi
+# DO NOT rename the executable
+# Studio requires 'RobloxStudio' to remain intact
 
-if [ -d "$APP/Contents/MacOS/RobloxMenuBar.app" ]; then
-    rm -rf "$APP/Contents/MacOS/RobloxMenuBar.app"
-fi
+# Remove quarantine flags
+xattr -cr "$APP"
 
-# CFBundleExecutable -> Self Service
-/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Self Service" "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Self Service" "$PLIST"
+# Ad-hoc sign everything inside the bundle
+find "$APP" -type f -perm +111 -exec codesign --force --sign - {} \; 2>/dev/null
 
-# CFBundleIdentifier -> com.jamfsoftware.selfservice.mac
-/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.jamfsoftware.selfservice.mac" "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.jamfsoftware.selfservice.mac" "$PLIST"
-
-codesign --force --deep --sign - "$APP"
-codesign --verify --deep --strict "$APP" || true
-
-# --- INSTALL ---
-INSTALL_DIR="$HOME/Applications"
-mkdir -p "$INSTALL_DIR"
-
-APP_NAME="Self Service.app"
-FINAL_APP_PATH="$INSTALL_DIR/$APP_NAME"
-
-rm -rf "$FINAL_APP_PATH"
-mv "$APP" "$FINAL_APP_PATH"
-
-# Add to Dock
-defaults write com.apple.dock persistent-apps -array-add \
-"<dict>
-    <key>tile-data</key>
-    <dict>
-        <key>file-data</key>
-        <dict>
-            <key>_CFURLString</key>
-            <string>$FINAL_APP_PATH</string>
-            <key>_CFURLStringType</key>
-            <integer>0</integer>
-        </dict>
-    </dict>
-</dict>"
-
-killall Dock
-
-echo "Done. Roblox Studio is now disguised as Self Service and added to your Dock."
+# Sign the bundle itself
+codesign --force --sign - "$APP"
