@@ -1,55 +1,60 @@
-
 #!/bin/bash
 set -e
 
-# --- GET VERSION HASH ---
+# Get latest Roblox Studio version
 ROBLOX_VERSION=$(
-curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacStudio/channel/LIVE" \
-| python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
+    curl -fsSL "https://clientsettings.roblox.com/v2/client-version/MacStudio/channel/LIVE" |
+    python3 -c "import sys, json; print(json.load(sys.stdin)['clientVersionUpload'])"
 )
+
 if [ -z "$ROBLOX_VERSION" ]; then
     echo "Failed to fetch Roblox version"
     exit 1
 fi
 
+echo "Roblox Studio version: $ROBLOX_VERSION"
 
-# --- CLEAN ---
-rm -rf RobloxStudio.app RobloxStudioExtract /tmp/robloxstudio.dmg
-
-# --- ARCH DETECTION ---
+# Detect Mac architecture
 ARCH="arm64"
 if [ "$(uname -m)" = "x86_64" ]; then
     ARCH="x86-64"
 fi
 
-# --- BUILD DOWNLOAD URL ---
+# Download official DMG
 DOWNLOAD_URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${ROBLOX_VERSION}-RobloxStudio.dmg"
 
+echo "Downloading Roblox Studio..."
 curl -L --fail --show-error "$DOWNLOAD_URL" -o /tmp/RobloxStudio.dmg
 
-# --- VALIDATE ---
+# Verify download
 FILE_TYPE=$(file /tmp/RobloxStudio.dmg)
 echo "Downloaded file type: $FILE_TYPE"
 
 if echo "$FILE_TYPE" | grep -qi "HTML"; then
-    echo "ERROR: Download returned an HTML error page instead of the DMG."
+    echo "ERROR: Download returned an HTML error page."
     exit 1
 fi
 
-echo "Got download successfully."
-# --- EXTRACT ---
-rm -rf RobloxStudioExtract
-mkdir -p RobloxStudioExtract
-hdiutil attach /tmp/RobloxStudio.dmg
+# Mount DMG
+echo "Mounting Roblox Studio..."
+MOUNT_OUTPUT=$(hdiutil attach /tmp/RobloxStudio.dmg)
 
-# --- FIND APP ---
-APP=$(find "/Volumes/RobloxStudioInstaller 1" -name "*.app" -maxdepth 2 | head -n 1)
+echo "$MOUNT_OUTPUT"
 
-if [ -z "$APP" ]; then
-    echo "Could not find Roblox Studio app"
+# Find mounted Roblox volume
+VOLUME=$(echo "$MOUNT_OUTPUT" | grep '/Volumes/' | sed 's/.*\t//')
+
+if [ -z "$VOLUME" ]; then
+    echo "Could not find mounted Roblox volume"
     exit 1
 fi
 
+echo "Mounted at: $VOLUME"
+
+# Open the official installer
+open "$VOLUME/RobloxStudioInstaller.app"
+
+echo "Roblox Studio installer opened."
 # =========================
 # PATCH SECTION
 # =========================
