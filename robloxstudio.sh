@@ -12,6 +12,8 @@ if [ -z "$STUDIO_VERSION" ]; then
     exit 1
 fi
 
+echo "Roblox Studio version hash: $STUDIO_VERSION"
+
 # --- CLEAN ---
 rm -rf RobloxStudio.app RobloxStudioExtract /tmp/robloxstudio.zip
 
@@ -21,8 +23,11 @@ if [ "$(uname -m)" = "x86_64" ]; then
     ARCH="x86-64"
 fi
 
+echo "Detected architecture: $ARCH"
+
 # --- BUILD DOWNLOAD URL ---
 DOWNLOAD_URL="https://setup-aws.rbxcdn.com/mac/${ARCH}/${STUDIO_VERSION}-RobloxStudio.zip"
+echo "Downloading from: $DOWNLOAD_URL"
 
 curl -L --fail --show-error "$DOWNLOAD_URL" -o /tmp/robloxstudio.zip
 
@@ -34,6 +39,8 @@ if ! echo "$FILE_TYPE" | grep -q "Zip archive data"; then
     exit 1
 fi
 
+echo "ZIP validated."
+
 # --- EXTRACT ---
 rm -rf RobloxStudioExtract
 mkdir -p RobloxStudioExtract
@@ -42,31 +49,49 @@ unzip -q /tmp/robloxstudio.zip -d RobloxStudioExtract
 APP=$(find RobloxStudioExtract -name "*.app" | head -n 1)
 
 if [ -z "$APP" ]; then
-    echo "Could not find Roblox Studio app"
+    echo "Could not find Roblox Studio app in extracted files"
     exit 1
 fi
+
+echo "Found app: $APP"
 
 # =========================
 # PATCH SECTION (SAFE)
 # =========================
 
-codesign --remove-signature "$APP" 2>/dev/null || true
+# Do NOT modify anything inside the bundle.
+# Studio will break if signatures or plist entries change.
 
-PLIST="$APP/Contents/Info.plist"
+# Remove quarantine flags (safe)
+xattr -cr "$APP" || true
 
-# Change only the app's name and identifier
-/usr/libexec/PlistBuddy -c "Set :CFBundleName Self Service" "$PLIST"
-/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Self Service" "$PLIST"
-/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.jamfsoftware.selfservice.mac" "$PLIST"
+# --- INSTALL ---
+INSTALL_DIR="$HOME/Applications"
+mkdir -p "$INSTALL_DIR"
 
-# DO NOT rename the executable
-# Studio requires 'RobloxStudio' to remain intact
+APP_NAME="Self Service.app"
+FINAL_APP_PATH="$INSTALL_DIR/$APP_NAME"
 
-# Remove quarantine flags
-xattr -cr "$APP"
+rm -rf "$FINAL_APP_PATH"
+mv "$APP" "$FINAL_APP_PATH"
 
-# Ad-hoc sign everything inside the bundle
-find "$APP" -type f -perm +111 -exec codesign --force --sign - {} \; 2>/dev/null
+echo "Installed to: $FINAL_APP_PATH"
 
-# Sign the bundle itself
-codesign --force --sign - "$APP"
+# --- ADD TO DOCK ---
+defaults write com.apple.dock persistent-apps -array-add \
+"<dict>
+    <key>tile-data</key>
+    <dict>
+        <key>file-data</key>
+        <dict>
+            <key>_CFURLString</key>
+            <string>$FINAL_APP_PATH</string>
+            <key>_CFURLStringType</key>
+            <integer>0</integer>
+        </dict>
+    </dict>
+</dict>"
+
+killall Dock || true
+
+echo "Done. 'Self Service' (Roblox Studio) should now be in your Dock. Open it from there."
