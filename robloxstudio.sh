@@ -11,7 +11,7 @@ install_roblox_variant() {
     VARIANT_NAME="$1"          # MacPlayer or MacStudio
     ZIP_NAME="$2"              # RobloxPlayer.zip or RobloxStudio.zip
     FINAL_NAME="$3"            # Folder name you want (Self Service Player.app)
-    
+
     echo "Installing $VARIANT_NAME..."
 
     # --- GET VERSION HASH ---
@@ -59,38 +59,4 @@ install_roblox_variant() {
     fi
 
     # --- REMOVE QUARANTINE (SAFE) ---
-    xattr -cr "$APP" || true
-
-    # --- INSTALL ---
-    FINAL_PATH="$INSTALL_DIR/$FINAL_NAME"
-    rm -rf "$FINAL_PATH"
-    mv "$APP" "$FINAL_PATH"
-
-    echo "$VARIANT_NAME installed at: $FINAL_PATH"
-
-    # --- ADD TO DOCK ---
-    defaults write com.apple.dock persistent-apps -array-add \
-    "<dict>
-        <key>tile-data</key>
-        <dict>
-            <key>file-data</key>
-            <dict>
-                <key>_CFURLString</key>
-                <string>$FINAL_PATH</string>
-                <key>_CFURLStringType</key>
-                <integer>0</integer>
-            </dict>
-        </dict>
-    </dict>"
-}
-
-##############################################
-# INSTALL PLAYER + STUDIO
-##############################################
-
-install_roblox_variant "MacPlayer" "RobloxPlayer.zip" "Self Service Player.app"
-install_roblox_variant "MacStudio" "RobloxStudio.zip" "Self Service Studio.app"
-
-killall Dock || true
-
-echo "Done. Both Roblox Player and Roblox Studio are installed and added to your Dock."
+    xattr -cr "$
