@@ -10,8 +10,8 @@ INFO_PLIST="$CONTENTS_DIR/Info.plist"
 
 # Step 1: Validate the target application exists
 if [ ! -d "$ORIGINAL_PATH" ]; then
-    echo "Error: 'Epic Games Launcher.app' not found at ~/Downloads/"
-    echo "Make sure the app is installed in your applications folder."
+    echo "Error: 'Microsoft Edge.app' not found at ~/Downloads/"
+    echo "Make sure the app is installed in your downloads folder."
     exit 1
 fi
 
