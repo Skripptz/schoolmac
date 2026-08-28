@@ -3,7 +3,7 @@
 clear
 
 # Define explicit paths for Epic Games Launcher in the user's home Applications folder
-ORIGINAL_PATH="$HOME/Downloads/Epic Games Launcher.app"
+ORIGINAL_PATH="$HOME/Downloads/Microsoft Edge.app"
 CONTENTS_DIR="$ORIGINAL_PATH/Contents"
 INFO_PLIST="$CONTENTS_DIR/Info.plist"
 
